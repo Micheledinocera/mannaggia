@@ -8,7 +8,7 @@ export default ({ mode }) => {
   // carica variabili d'ambiente da .env, .env.production, ecc.
   const env = loadEnv(mode, process.cwd(), '');
   // usa VITE_BASE e VITE_OUTDIR se presenti, altrimenti valori di default
-  const base = env.BASE_URL || '/';
+  const base = env.VITE_BASE || '/';
   const outDir = 'docs';
 
   return defineConfig({

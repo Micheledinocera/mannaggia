@@ -1,0 +1,376 @@
+<template>
+  <section class="santo-stage" :aria-busy="loading.toString()">
+    <div class="stars" aria-hidden="true"></div>
+
+    <div class="panel" role="region" aria-label="Santo del giorno">
+      <header class="header">
+  <div class="title-outer">
+    <h1 class="viva">Mannaggia a </h1>
+
+    <!-- bottone di rivelazione visibile fino a reveal -->
+    <div v-if="!revealed && !loading" class="reveal-wrap">
+      <button class="reveal-btn" @click="revealSanto" aria-pressed="false">
+        Scopri il santo
+      </button>
+    </div>
+
+    <!-- il nome compare solo dopo reveal -->
+    <h2 class="santo-name" v-if="revealed && !loading">{{ santo.nome }}</h2>
+
+    <div class="placeholder" v-else-if="loading">Caricamento...</div>
+  </div>
+</header>
+
+
+      <!-- <main class="content">
+        <div class="card" v-if="!loading && !error">
+          <div class="santo-card">
+            <div class="santo-meta">
+              <p class="feast-date">Festa: <strong>{{ santo.data_festa || formattedDate }}</strong></p>
+              <p class="origin" v-if="santo.provenienza">Provenienza: <strong>{{ santo.provenienza }}</strong></p>
+            </div>
+            <div class="santo-desc" v-html="santo.descrizione"></div>
+            <footer class="sources" v-if="santo.fonte">
+              Fonte: <a :href="santo.fonte" target="_blank" rel="noopener">link</a>
+            </footer>
+          </div>
+        </div>
+
+        <div class="error" v-if="error">
+          {{ error }}
+        </div>
+      </main> -->
+    </div>
+
+    <audio ref="audio" :src="musicUrl" loop crossorigin="anonymous"></audio>
+  </section>
+</template>
+
+<script setup>
+import { ref, onMounted, watch, computed } from 'vue'
+
+const props = defineProps({
+  apiKey: { type: String, required: true },
+  apiUrl: { type: String, default: 'https://santodelgiorno.mintdev.me/api/santo' },
+  musicUrl: { type: String, required: true }
+})
+
+const santo = ref({})
+const loading = ref(true)
+const error = ref(null)
+const isPlaying = ref(false)
+const isMuted = ref(false)
+const audio = ref(null)
+const revealed = ref(false)
+
+
+const formattedDate = computed(() => {
+  const d = new Date()
+  return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+})
+
+async function fetchSanto() {
+  loading.value = true
+  error.value = null
+  try {
+    const today = new Date()
+    const mese = today.getMonth() + 1
+    const giorno = today.getDate()
+    const url = `https://santodelgiorno.mintdev.me/api/v1/santo/data/${mese}/${giorno}`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${props.apiKey}` },
+      Accept: 'application/json'
+    })
+    if (!res.ok) throw new Error('Errore nel recupero del santo')
+    const data = await res.json()
+    // adattamento al formato dell'API
+    santo.value = {
+      nome: data.data[0].attributes.nome || 'Santo sconosciuto',
+      descrizione: data.descrizione || data.description || '',
+      fonte: data.fonte || data.source || '',
+      data_festa: data.data || today,
+      provenienza: data.provenienza || data.origin || ''
+    }
+  } catch (e) {
+    error.value = 'Impossibile caricare il santo del giorno'
+    console.error(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function playAudioUnmuted() {
+  if (!audio.value) return
+  // try play unmuted first (may be blocked)
+  audio.value.muted = false
+  try {
+    await audio.value.play()
+    isPlaying.value = true
+    isMuted.value = false
+  } catch (err) {
+    // fallback: play muted then try unmute after gesture/time
+    audio.value.muted = true
+    try {
+      await audio.value.play()
+      isPlaying.value = true
+      isMuted.value = true
+      // best-effort unmute shortly after
+      setTimeout(async () => {
+        try {
+          audio.value.muted = false
+          await audio.value.play()
+          isMuted.value = false
+        } catch {}
+      }, 600)
+    } catch {}
+  }
+}
+
+// funzione reveal che mostra nome, avvia audio e confetti
+function revealSanto() {
+  if (revealed.value) return
+  revealed.value = true
+
+  // play audio (user gesture triggered)
+  playAudioUnmuted().catch(() => {})
+
+  // avvia confetti
+  launchConfetti()
+}
+
+// semplice confetti DOM-based, pulisce sezione dopo animazione
+function launchConfetti() {
+  const container = document.createElement('div')
+  container.className = 'confetti-container'
+  container.setAttribute('aria-hidden', 'true')
+  document.body.appendChild(container)
+
+  const colors = ['#ffd700', '#ff6b6b', '#8ec5ff', '#c7ffb5', '#f3e1ff']
+  const count = 36
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div')
+    el.className = 'confetti'
+    const size = Math.random() * 10 + 6
+    el.style.width = `${size}px`
+    el.style.height = `${size * 0.6}px`
+    el.style.background = colors[Math.floor(Math.random() * colors.length)]
+    el.style.left = `${Math.random() * 100}%`
+    el.style.transform = `rotate(${Math.random() * 360}deg)`
+    el.style.opacity = `${0.8 + Math.random() * 0.2}`
+    container.appendChild(el)
+
+    // trigger fall animation with random delays
+    el.style.animationDelay = `${Math.random() * 0.2}s`
+  }
+
+  // remove after animation (2.8s)
+  setTimeout(() => {
+    container.classList.add('confetti-fade')
+    setTimeout(() => container.remove(), 800)
+  }, 2800)
+}
+
+
+onMounted(() => {
+  audio.value = document.querySelector('audio')
+  fetchSanto()
+  // rispetta preferenze di riduzione movimento
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (prefersReduced) {
+    document.documentElement.classList.add('reduced-motion')
+  }
+})
+
+watch(() => props.musicUrl, (n) => {
+  if (audio.value) {
+    audio.value.src = n
+    if (isPlaying.value) audio.value.play().catch(() => {})
+  }
+})
+</script>
+
+<style scoped>
+/* layout */
+.santo-stage {
+  min-height: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  background: radial-gradient(ellipse at top, rgba(255,250,240,0.08), rgba(10,16,35,1) 60%);
+  color: #f8f7ff;
+  position: relative;
+  overflow: hidden;
+  font-family: "Georgia", "Times New Roman", serif;
+}
+
+/* slow twinkling stars background */
+.stars {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px),
+    radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px);
+  background-size: 200px 200px, 120px 120px;
+  animation: drift 60s linear infinite, twinkle 8s linear infinite;
+  opacity: 0.18;
+  pointer-events: none;
+  transform: translateZ(0);
+}
+
+/* slow drifting */
+@keyframes drift { from { transform: translateY(0) } to { transform: translateY(-40px) } }
+@keyframes twinkle { 0%,100% { opacity:0.18 } 50% { opacity:0.26 } }
+
+/* panel */
+.panel {
+  width: min(980px, 95%);
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(6,10,22,0.6), 0 2px 6px rgba(0,0,0,0.4);
+  backdrop-filter: blur(6px) saturate(1.1);
+  z-index: 2;
+}
+
+/* header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.title-outer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.viva {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.6rem);
+  letter-spacing: 0.12em;
+  color: #fff8ea;
+  text-shadow: 0 6px 22px rgba(255,238,200,0.06), 0 2px 6px rgba(0,0,0,0.5);
+  transform-origin: left center;
+  animation: slowFloat 8s ease-in-out infinite;
+  font-weight: 700;
+}
+
+.santo-name {
+  margin: 0;
+  font-size: clamp(1.2rem, 2.4vw, 1.9rem);
+  color: #eaf6ff;
+  font-style: italic;
+  font-weight: 600;
+  text-shadow: 0 6px 18px rgba(138,176,255,0.06);
+  opacity: 0;
+  animation: fadeInSlow 2s ease forwards 0.6s;
+}
+
+/* slow float and fade */
+@keyframes slowFloat { 0% { transform: translateY(0) } 50% { transform: translateY(-6px) } 100% { transform: translateY(0) } }
+@keyframes fadeInSlow { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }
+
+/* content card */
+.content { display: flex; gap: 1rem; align-items: flex-start; }
+.card { flex: 1; }
+.santo-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.03);
+  border-radius: 12px;
+  padding: 1.25rem;
+  animation: contentFade 1.6s ease forwards;
+  box-shadow: 0 8px 20px rgba(4,8,20,0.6);
+  color: #eef6ff;
+}
+@keyframes contentFade { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
+
+.santo-meta { font-size: 0.92rem; color: #dbeeff; margin-bottom: .75rem; }
+.santo-desc { line-height: 1.6; color: #f3f7ff; opacity: 0.95; }
+
+/* controls */
+.controls { display:flex; gap: 0.5rem; align-items:center; }
+.btn {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.05);
+  color: #fff;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1rem;
+  backdrop-filter: blur(4px);
+  transition: transform 0.28s ease, box-shadow 0.28s ease;
+}
+.btn:hover { transform: translateY(-4px); box-shadow: 0 8px 18px rgba(0,0,0,0.45); }
+.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+/* error */
+.error { color: #ffd1d1; background: rgba(255,20,20,0.03); padding: .8rem; border-radius:8px; }
+
+/* reduced motion */
+.reduced-motion .viva,
+.reduced-motion .stars,
+.reduced-motion .santo-name,
+.reduced-motion .santo-card {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* responsive */
+@media (max-width:720px) {
+  .header { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
+  .controls { align-self:flex-end; }
+  .santo-stage { padding: 1.5rem; }
+}
+/* reveal button */
+.reveal-wrap { margin-top: 0.35rem; }
+.reveal-btn {
+  background: linear-gradient(180deg, #fffaf0, #f5f0e6);
+  color: #0b2840;
+  padding: 0.6rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.06);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(6,10,22,0.35);
+  transition: transform 250ms ease, box-shadow 250ms ease, opacity 250ms;
+}
+.reveal-btn:hover { transform: translateY(-4px); }
+.reveal-btn:active { transform: translateY(-1px) }
+
+/* ensure santo-name fades in nicely after revealed */
+.santo-name { opacity: 0; transform: translateY(6px); transition: opacity 900ms ease, transform 900ms ease; }
+[aria-busy="false"] .santo-name[style] {}
+
+/* when revealed, force visible (we rely on v-if, but keep CSS ready) */
+.revealed .santo-name { opacity: 1; transform: translateY(0); }
+
+/* confetti styles (position fixed to allow overflow) */
+.confetti-container {
+  position: fixed;
+  pointer-events: none;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  z-index: 9999;
+}
+.confetti {
+  position: absolute;
+  top: -10%;
+  will-change: transform, opacity;
+  border-radius: 2px;
+  animation: confetti-fall 2.6s cubic-bezier(.2,.6,.3,1) forwards;
+}
+@keyframes confetti-fall {
+  0% { transform: translateY(-10vh) rotate(0deg) translateX(0); opacity: 1 }
+  60% { transform: translateY(60vh) rotate(220deg) translateX(10vw); opacity: 1 }
+  100% { transform: translateY(120vh) rotate(420deg) translateX(-5vw); opacity: 0 }
+}
+.confetti-fade { opacity: 0; transition: opacity 600ms ease; }
+</style>

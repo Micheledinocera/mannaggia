@@ -2,13 +2,15 @@
   <main>
     <SantoDelGiornoCelestiale
       apiKey="425|zHfFIRgRP2FAsLY61AOxAxOhBnqEEFVKF5giHVkB01bab0fe"
-      musicUrl="/music/celestial-ambient.mp3"
+      :musicUrl="songUrl"
     />
   </main>
 </template>
 
 <script setup>
 import SantoDelGiornoCelestiale from './components/SantoDelGiornoCelestiale.vue'
+import songUrl from './assets/music/celestial-ambient.mp3';
+
 </script>
 
 <style>

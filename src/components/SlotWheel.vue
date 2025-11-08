@@ -1,5 +1,5 @@
 <template>
-  <div class="slot-reel" :style="{ height: (visible * itemHeight) + 'px' }">
+  <div class="slot-reel" :style="{height: visible * itemHeight + 'px'}">
     <div
       class="strip"
       :style="stripStyle"
@@ -10,7 +10,7 @@
         v-for="(it, i) in repeatedList"
         :key="i + '-' + it"
         class="slot-item"
-        :style="{ height: itemHeight + 'px', lineHeight: itemHeight + 'px' }"
+        :style="{height: itemHeight + 'px', lineHeight: itemHeight + 'px'}"
       >
         {{ it }}
       </div>
@@ -19,15 +19,15 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue';
+import {ref, computed, nextTick, watch} from 'vue';
 
 const props = defineProps({
-  items: { type: Array, required: true },
-  visible: { type: Number, default: 1 },
-  itemHeight: { type: Number, default: 56 },
-  duration: { type: Number, default: 700 },
-  easing: { type: String, default: 'cubic-bezier(.22,.9,.12,1)' },
-  maxExtraRounds: { type: Number, default: 8 } // aumenta se vuoi spin più lunghi
+  items: {type: Array, required: true},
+  visible: {type: Number, default: 1},
+  itemHeight: {type: Number, default: 56},
+  duration: {type: Number, default: 700},
+  easing: {type: String, default: 'cubic-bezier(.22,.9,.12,1)'},
+  maxExtraRounds: {type: Number, default: 8}, // aumenta se vuoi spin più lunghi
 });
 const emit = defineEmits(['stopped']);
 
@@ -48,8 +48,10 @@ const repeatedList = computed(() => {
 // style reattivo (unico computed)
 const stripStyle = computed(() => ({
   transform: `translate3d(0, ${-position.value}px, 0)`,
-  transition: transitioning.value ? `transform ${transDuration.value}ms ${props.easing}` : 'none',
-  willChange: 'transform'
+  transition: transitioning.value
+    ? `transform ${transDuration.value}ms ${props.easing}`
+    : 'none',
+  willChange: 'transform',
 }));
 
 function normalizeIndex(i) {
@@ -63,9 +65,10 @@ async function spinTo(indexOrLabel, extraRounds = 3) {
   if (transitioning.value) return;
 
   // supporta passaggio di label invece di indice
-  let index = typeof indexOrLabel === 'number'
-    ? indexOrLabel
-    : props.items.indexOf(indexOrLabel);
+  let index =
+    typeof indexOrLabel === 'number'
+      ? indexOrLabel
+      : props.items.indexOf(indexOrLabel);
 
   if (index < 0) index = 0;
   index = normalizeIndex(index);
@@ -92,7 +95,10 @@ async function spinTo(indexOrLabel, extraRounds = 3) {
   const distance = Math.abs(targetPosition - position.value);
 
   // scala la durata in funzione della distanza (regolabile)
-  transDuration.value = Math.max(props.duration, Math.round((distance / props.itemHeight) * (props.duration / 3)));
+  transDuration.value = Math.max(
+    props.duration,
+    Math.round((distance / props.itemHeight) * (props.duration / 3))
+  );
 
   // abilito la transition e imposto la destinazione
   transitioning.value = true;
@@ -108,9 +114,11 @@ function onTransitionEnd(e) {
   const itemsPerCopy = props.items.length;
   const resetPoint = itemsPerCopy * props.itemHeight;
   // portiamo la posizione dentro la copia centrale mantenendo l'elemento visibile coerente
-  const visibleSlotIndex = Math.round(position.value / props.itemHeight) % itemsPerCopy;
+  const visibleSlotIndex =
+    Math.round(position.value / props.itemHeight) % itemsPerCopy;
   const middleCopy = Math.floor(copies.value / 2);
-  position.value = middleCopy * resetPoint + (visibleSlotIndex * props.itemHeight);
+  position.value =
+    middleCopy * resetPoint + visibleSlotIndex * props.itemHeight;
   transitioning.value = false;
   emit('stopped', targetIndex.value);
 }
@@ -131,9 +139,12 @@ function startLoop(pxPerSec = 120) {
   }
   rafId = requestAnimationFrame(step);
 }
-function cancelLoop() { if (rafId) cancelAnimationFrame(rafId); rafId = null; }
+function cancelLoop() {
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+}
 
-defineExpose({ spinTo, startLoop, cancelLoop, stripStyle });
+defineExpose({spinTo, startLoop, cancelLoop, stripStyle});
 </script>
 
 <style scoped>
@@ -154,8 +165,11 @@ defineExpose({ spinTo, startLoop, cancelLoop, stripStyle });
 .slot-item {
   text-align: center;
   box-sizing: border-box;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   font-size: 18px;
   padding: 0 12px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 </style>
